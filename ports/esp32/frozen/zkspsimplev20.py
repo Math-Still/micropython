@@ -29,7 +29,7 @@ class SCBord():
             machine.Pin(16).irq(handler = self.attachInterrupt_funok, trigger = machine.Pin.IRQ_FALLING)
         elif self.version == "SCB_v2.0x":
             machine.Pin(5).irq(handler = self.attachInterrupt_funok, trigger = machine.Pin.IRQ_FALLING)
-            self.rgb = neopixel.NeoPixel(machine.Pin(23), 4, timing = True)
+            self.rgb = neopixel.NeoPixel(machine.Pin(23), 4)
             self.rgb[0] = (30, 30, 10)
             self.rgb[1] = (30, 30, 10)
             self.rgb[2] = (30, 30, 10)
@@ -42,7 +42,7 @@ class SCBord():
         self.isstart = False
     
         self.menuindex = 0
-        
+        # i2c = machine.I2C(scl=machine.Pin(15), sda=machine.Pin(4), freq=100000)
         i2oled = self.SCB.get_sen_i2c(60)
         self.oled = ssd1306.SSD1306_I2C(128,64,i2oled)
         
