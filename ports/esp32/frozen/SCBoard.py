@@ -93,19 +93,40 @@ class smartpoint():
         return int(self.yy)
 
 
-import SCBord_port
+# 移除SCBord_port依赖，使用原生I2C
 #科创板血氧
 class blood():
     def __init__(self):
-
-
-        self.SCB = SCBord_port.SCBord_port(1)
+        # 尝试不同的I2C引脚配置来寻找血氧传感器(地址87)
+        self.i2c_configs = [
+            (4, 15),   # SDA=4, SCL=15
+            (5, 18),   # SDA=5, SCL=18  
+            (21, 22),  # SDA=21, SCL=22
+            (13, 14)   # SDA=13, SCL=14
+        ]
+        
+        self.i2cxueyang = None
+        self.version = "SCB_v2.0x"  # 默认版本
+        
         try:
             self.xueyang = Xueyang()
-            self.i2cxueyang = self.SCB.get_sen_i2c(87)
-
-
-        except:
+            # 尝试找到血氧传感器
+            for sda, scl in self.i2c_configs:
+                try:
+                    i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=400000)
+                    devices = i2c.scan()
+                    if 87 in devices:  # 血氧传感器地址
+                        self.i2cxueyang = i2c
+                        print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
+                        break
+                except:
+                    continue
+                    
+            if not self.i2cxueyang:
+                print("[BLOOD] 未找到血氧传感器")
+                
+        except Exception as e:
+            print(f"[BLOOD] 初始化失败: {e}")
             pass
         self.bloodbool = True
         self.REG_FIFO_DATA = 7
@@ -363,10 +384,61 @@ class Xueyang():
 class MSA301():
     def __init__(self):
         self.addr = 98
-        self.SCB = SCBord_port.SCBord_port(1)
-        self.i2cxy = self.SCB.get_sen_i2c(self.addr)
-        self.i2cxy.writeto(self.addr, b'\x0F\x08')
-        self.i2cxy.writeto(self.addr, b'\x11\x00')
+        # 尝试不同的I2C引脚配置来寻找三轴传感器(地址98)
+        self.i2c_configs = [
+            (4, 15),   # SDA=4, SCL=15
+            (5, 18),   # SDA=5, SCL=18  
+            (21, 22),  # SDA=21, SCL=22
+            (13, 14)   # SDA=13, SCL=14
+        ]
+        
+        self.i2cxy = None
+        
+        # 快速找到三轴传感器 - 优先尝试常用配置
+        success = False
+        common_configs = [
+            (21, 22),  # SDA=21, SCL=22 (最常用)
+            (4, 15),   # SDA=4, SCL=15
+        ]
+        
+        # 第一轮：尝试最常用的配置
+        for sda, scl in common_configs:
+            try:
+                # 使用较低频率和超时，提高兼容性和速度
+                i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                devices = i2c.scan()
+                if self.addr in devices:  # 三轴传感器地址
+                    self.i2cxy = i2c
+                    print(f"[MSA301] 三轴传感器找到 - SDA:{sda}, SCL:{scl}")
+                    # 快速初始化传感器
+                    self.i2cxy.writeto(self.addr, b'\x0F\x08')
+                    self.i2cxy.writeto(self.addr, b'\x11\x00')
+                    success = True
+                    break
+            except:
+                # 静默跳过失败的配置
+                continue
+        
+        # 第二轮：如果常用配置失败，尝试其他配置
+        if not success:
+            fallback_configs = [(5, 18), (13, 14)]
+            for sda, scl in fallback_configs:
+                try:
+                    i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                    devices = i2c.scan()
+                    if self.addr in devices:
+                        self.i2cxy = i2c
+                        print(f"[MSA301] 三轴传感器找到 - SDA:{sda}, SCL:{scl}")
+                        self.i2cxy.writeto(self.addr, b'\x0F\x08')
+                        self.i2cxy.writeto(self.addr, b'\x11\x00')
+                        success = True
+                        break
+                except:
+                    continue
+                
+        if not success:
+            print("[MSA301] 未找到三轴传感器，将使用模拟数据")
+            self.i2cxy = None  # 不抛出异常，允许系统继续运行
     def get_y(self):
         retry = 0
         if (retry < 5):
@@ -469,8 +541,39 @@ class Button():
         self.pin18 = machine.Pin(18, machine.Pin.IN)
         self.pin5 = machine.Pin(5, machine.Pin.IN)
 
-        self.SCB = SCBord_port.SCBord_port(1)
-        self.version =  self.SCB.get_scb_version()
+        # 使用原生方法检测版本，基于I2C设备扫描
+        self.version = self._detect_version()
+
+    def _detect_version(self):
+        """检测科创板版本 - 快速版本"""
+        # 优先尝试最常用的配置，减少扫描时间
+        common_configs = [
+            (21, 22),  # SDA=21, SCL=22 (最常用)
+            (13, 14),  # SDA=13, SCL=14 (v2.0j)
+        ]
+        
+        # 使用更快的I2C频率和减少超时时间
+        for sda, scl in common_configs:
+            try:
+                # 创建I2C时使用更高频率，减少扫描时间
+                i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                devices = i2c.scan()
+                
+                # 快速检测特定设备来判断版本
+                if 80 in devices:
+                    if sda == 13:
+                        print(f"[BUTTON] 检测到SCB_v2.0j版本 - SDA:{sda}, SCL:{scl}")
+                        return "SCB_v2.0j"
+                    elif sda == 21:
+                        print(f"[BUTTON] 检测到SCB_v2.0x版本 - SDA:{sda}, SCL:{scl}")
+                        return "SCB_v2.0x"
+            except:
+                # 快速跳过失败的配置
+                continue
+                
+        # 如果快速检测失败，使用默认版本避免进一步延迟
+        print("[BUTTON] 快速检测失败，使用默认版本SCB_v2.0x")
+        return "SCB_v2.0x"
 
     def value(self,but):
         if self.version == "SCB_v2.0j":

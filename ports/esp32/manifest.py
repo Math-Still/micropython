@@ -41,10 +41,11 @@ freeze("frozen", (
     "SCBoard_game.py",
     "SCBoard_text.py",
     "SCBoard_weather_text.py",
-    "SCBord_port.py",
     "sht20.py",
     "simple.py",
     "sonar.py",
     "zkspres.py",
-    "zkspsimplev20.py"
+    "zkspsimplev20.py",
+    "dual_channel_service.py"
+
 ), opt=0)

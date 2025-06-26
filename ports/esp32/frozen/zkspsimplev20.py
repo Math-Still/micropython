@@ -1,829 +1,297 @@
 import machine
-import SCBoard
-import music
-import ssd1306
-import SCBoard_text
 import time
-import _thread
-import random
-import SCBord_port
-import neopixel
+import ssd1306
 
-#科创板演示代码
+# 简化版科创板演示代码 - 最小依赖版本
 
-
-class SCBord():
+class SimpleSCBord():
     def __init__(self):
+        # 基本配置
+        self.version = "SCB_v2.0x"  # 默认版本
         
+        # 按键状态
         self.keyleft = 1
         self.keyright = 1
         self.keyup = 1
         self.keydown = 1
         
-        self.SCB = SCBord_port.SCBord_port(0)
-        self.version =  self.SCB.get_scb_version()
-
-        self.button = SCBoard.Button()
-        machine.Pin(19).irq(handler = self.attachInterrupt_funmenu, trigger = machine.Pin.IRQ_FALLING)
-        if self.version == "SCB_v2.0j":
-            machine.Pin(16).irq(handler = self.attachInterrupt_funok, trigger = machine.Pin.IRQ_FALLING)
-        elif self.version == "SCB_v2.0x":
-            machine.Pin(5).irq(handler = self.attachInterrupt_funok, trigger = machine.Pin.IRQ_FALLING)
-            self.rgb = neopixel.NeoPixel(machine.Pin(23), 4)
-            self.rgb[0] = (30, 30, 10)
-            self.rgb[1] = (30, 30, 10)
-            self.rgb[2] = (30, 30, 10)
-            self.rgb[3] = (30, 30, 10)
-            self.rgb.write()
-            
-        
+        # 菜单状态
         self.menu = False
         self.ok = False
         self.isstart = False
-    
         self.menuindex = 0
-        # i2c = machine.I2C(scl=machine.Pin(15), sda=machine.Pin(4), freq=100000)
-        i2oled = self.SCB.get_sen_i2c(60)
-        self.oled = ssd1306.SSD1306_I2C(128,64,i2oled)
         
-        self.tx = SCBoard_text.Font()
-        self.t1 = self.tx.get_24_text("t1")
-        self.t2 = self.tx.get_24_text("t2")
-        self.t3 = self.tx.get_24_text("t3")
-        self.t4 = self.tx.get_24_text("t4")
-        self.t5 = self.tx.get_24_text("t5")
-        self.t6 = self.tx.get_24_text("t6")
-        self.t7 = self.tx.get_24_text("t7")
-        self.t8 = self.tx.get_24_text("t8")
-
-        self.fangge32 = self.tx.getzksp("fangge32")
-        self.fangge16 = self.tx.getzksp("fangge16")
-        self.qiuti16 = self.tx.getzksp("qiuti16")
-        self.qiuti16xiaolian = self.tx.getzksp("qiuti16xiaolian")
-        self.qiuti16kulian = self.tx.getzksp("qiuti16kulian")
-        self.lingdian16 = self.tx.getzksp("lingdian16")
+        # 初始化硬件
+        self.init_hardware()
         
-        self.geshu = 32
-        self.ypy0 = 0
-        self.ypy1 = 32
-        self.xpy = 0
-        self.ypy = 16
-        self.tppy = 4
+        # 显示欢迎界面
+        self.show_welcome()
         
-        self.pwm27 = machine.PWM(machine.Pin(27))
-        self.adc39 = machine.ADC(machine.Pin(39))
-        self.adc39.atten(machine.ADC.ATTN_11DB)
-        self.adc36 = machine.ADC(machine.Pin(36))
-        self.adc36.atten(machine.ADC.ATTN_11DB)
-        
-        
-        self.qiuti16s = Qiuti16()
-        self.sanzhou = SCBoard.MSA301()
-        
-        self.blood = SCBoard.blood()
-        #self.xueyang = SCBoard.Xueyang()
-        
-        self.line_d = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-        
-        self.line_a = SCBoard.smartpoint(1,128,1,64,0.3)
-        self.line_b = SCBoard.smartpoint(1,128,1,64,0.2)
-        self.line_c = SCBoard.smartpoint(1,128,1,64,0.15)
-        self.line_s = SCBoard.smartpoint(-20,128,-20,64,0.1)
-        
-        self.spx = 0
-        self.spy = 0
-        
-        
-        self.lr = 20
-        self.lg = 20
-        self.lb = 20
-        self.ll = 20
-        self.lc = 5
-        
-        self.zaoyindata = []
-        
-        self.menutoled()
-        
-        
-
-
-    def start(self):
-        pwmmenu = 0
-        pwmmboo = False
-        while True:
-        
-            if self.menu and self.menuindex == 0:
-                break
-
-            if self.button.value("上") and self.keydown:
-                self.keydown = 0
-                print("上")
-                if self.menuindex > 4 :self.menuindex -= 4
-                self.menutoled()
-            elif self.button.value("上")==0 and self.keydown==0:
-                self.keydown = 1
-                
-            if self.button.value("下") and self.keyup:
-                self.keyup = 0
-                print("下")
-                if self.menuindex <= 4 :self.menuindex += 4
-                self.menutoled()
-            elif self.button.value("下")==0 and self.keyup==0:
-                self.keyup = 1
-                
-            if self.button.value("左") and self.keyleft:
-                self.keyleft = 0
-                print("左")
-                if self.menuindex > 1 :self.menuindex -= 1
-                self.menutoled()
-            elif self.button.value("左")==0 and self.keyleft==0:
-                self.keyleft = 1
-                
-            if self.button.value("右") and self.keyright:
-                self.keyright = 0
-                print("右")
-                if self.menuindex < 8 :self.menuindex += 1
-                self.menutoled()
-            elif self.button.value("右")==0 and self.keyright==0:
-                self.keyright = 1
-                
+    def init_hardware(self):
+        """初始化硬件"""
+        try:
+            # 初始化OLED (使用ssd1306库)
+            self.i2c = machine.I2C(scl=machine.Pin(15), sda=machine.Pin(4), freq=100000)
+            self.oled = ssd1306.SSD1306_I2C(128, 64, self.i2c)
             
-            if self.ok and self.menuindex > 0:
-                self.menutoled()
-                
-            if self.menu:
-                self.menu = False
-                self.menutoled()
+            # 初始化按键引脚 (参考SCBoard.py的Button类)
+            self.pin12 = machine.Pin(12, machine.Pin.IN)  # 上
+            self.pin13 = machine.Pin(13, machine.Pin.IN)  # 下
+            self.pin14 = machine.Pin(14, machine.Pin.IN)  # 左
+            self.pin18 = machine.Pin(18, machine.Pin.IN)  # 右
+            self.pin5 = machine.Pin(5, machine.Pin.IN)    # 确认
+            self.pin19 = machine.Pin(19, machine.Pin.IN)  # 返回
             
-            
-            
-            if self.version == "SCB_v2.0j":
-                if pwmmboo:
-                    pwmmenu += 1
-                else:
-                    pwmmenu -= 1
-                if pwmmenu >1024:
-                    pwmmboo = False
-                elif pwmmenu <1:
-                    pwmmboo = True
-                self.pwm27.duty(int(pwmmenu))
-            elif self.version == "SCB_v2.0x":
-                if pwmmboo:
-                    pwmmenu += 1
-                else:
-                    pwmmenu -= 1
-                    
-                if pwmmenu >254:
-                    pwmmboo = False
-                elif pwmmenu <1:
-                    pwmmboo = True
-                self.rgb[0] = (pwmmenu, 50, 50)
-                self.rgb[1] = (50, pwmmenu, 50)
-                self.rgb[2] = (50, 100, pwmmenu)
-                self.rgb[3] = (50, pwmmenu, 0)
-                self.rgb.write()
-                
-               
-        self.oled.fill(0)
-        print("debug>>")
-        self.oled.text("debug>>",0,0)
-        self.oled.show()
-
-    def menutoled(self):
-        print(self.menuindex)
-        x = self.menuindex - 1
-        if -1 == x:
+            # 初始化LED (使用PWM控制)
             try:
-                
-                self.oled.framebuf.blit(self.tx.getzksp("zhong"),15, 20)
-                self.oled.framebuf.blit(self.tx.getzksp("ke"),40,20)
-                self.oled.framebuf.blit(self.tx.getzksp("si"),65, 20)
-                self.oled.framebuf.blit(self.tx.getzksp("ping"),90, 20)
-                #self.oled.text("www.3000lab.com",0,50)
-                self.oled.show()
-                music.play(music.RINGTONE, 25)
-                pass
+                self.led_pin = machine.Pin(23, machine.Pin.OUT)
+                self.led_pin.value(0)
             except:
-                print("屏幕测试失败")
+                self.led_pin = None
+                
+            # 初始化蜂鸣器
+            self.buzzer = machine.Pin(25, machine.Pin.OUT)
             
+            print("硬件初始化完成")
+            
+        except Exception as e:
+            print(f"硬件初始化失败: {e}")
+    
+    def show_welcome(self):
+        """显示欢迎界面"""
         try:
-            music.pitch_time(25, 100 + (x*50), 100)
+            self.oled.fill(0)
+            self.oled.text("Hello World!", 10, 10)
+            self.oled.text("Simple SCB", 20, 30)
+            self.oled.text("Press OK to start", 5, 50)
+            self.oled.show()
+            
+            # 播放欢迎音
+            self.beep(200, 100)
+            time.sleep_ms(50)
+            self.beep(400, 100)
+            
+        except Exception as e:
+            print(f"欢迎界面显示失败: {e}")
+    
+    def beep(self, freq, duration):
+        """蜂鸣器发声"""
+        try:
+            # 简单的PWM发声
+            for _ in range(duration // 10):
+                self.buzzer.value(1)
+                time.sleep_us(1000000 // freq // 2)
+                self.buzzer.value(0)
+                time.sleep_us(1000000 // freq // 2)
         except:
-            music.pitch(25, 100 + (x*50), 100)
-
-        if(x>=0):
-
+            pass
+    
+    def read_buttons(self):
+        """读取按键状态 (参考SCBoard.py的Button类)"""
+        try:
+            # 按键读取逻辑
+            up = self.pin12.value() == 1
+            down = self.pin13.value() == 1
+            left = self.pin14.value() == 1
+            right = self.pin18.value() == 1
+            ok = self.pin5.value() == 1
+            back = self.pin19.value() == 1
+            
+            return up, down, left, right, ok, back
+        except:
+            return False, False, False, False, False, False
+    
+    def show_menu(self):
+        """显示菜单"""
+        try:
             self.oled.fill(0)
             
-            if x<4:
-                self.oled.framebuf.blit(self.fangge32,x * self.geshu, self.ypy0)
-            elif x>=4:
-                self.oled.framebuf.blit(self.fangge32,(x-4) * self.geshu, self.ypy1)
-                
-            self.oled.framebuf.blit(self.t1,self.geshu*0 + self.tppy,self.ypy0+self.tppy)
-            self.oled.framebuf.blit(self.t2,self.geshu*1 + self.tppy,self.ypy0+self.tppy)
-            self.oled.framebuf.blit(self.t3,self.geshu*2 + self.tppy,self.ypy0+self.tppy)
-            self.oled.framebuf.blit(self.t4,self.geshu*3 + self.tppy,self.ypy0+self.tppy)
-            self.oled.framebuf.blit(self.t5,self.geshu*0 + self.tppy,self.ypy1+self.tppy)
-            self.oled.framebuf.blit(self.t6,self.geshu*1 + self.tppy,self.ypy1+self.tppy)
-            self.oled.framebuf.blit(self.t7,self.geshu*2 + self.tppy,self.ypy1+self.tppy)
-            self.oled.framebuf.blit(self.t8,self.geshu*3 + self.tppy,self.ypy1+self.tppy)
+            menu_items = [
+                "1. Text Demo",
+                "2. Sound Demo", 
+                "3. LED Demo",
+                "4. Game Demo",
+                "5. Exit"
+            ]
+            
+            for i, item in enumerate(menu_items):
+                if i == self.menuindex:
+                    self.oled.text(">" + item, 5, i * 12)
+                else:
+                    self.oled.text(" " + item, 5, i * 12)
             
             self.oled.show()
-            pass
-        try:
-            if self.menuindex == 1:
-                self.moveball()
-            if self.menuindex == 2:
-                self.music()
-            if self.menuindex == 3:
-                self.triaxial()
-            if self.menuindex == 4:
-                self.hertinfo()
-            if self.menuindex == 5:
-                self.noise()
-            if self.menuindex == 6:
-                self.light()
-            if self.menuindex == 7:
-                self.temps()
-            if self.menuindex == 8:
-                self.line()
-        except:
-            print("error")
-
-            
-            
-    
-    def line(self):
-        if self.ok:
-            
-            pass
-            
-        while self.ok:
-            self.oled.fill(0)
-        
-            self.line_s.carry()
-            self.oled.framebuf.blit(self.qiuti16xiaolian,self.line_s.get_x(), self.line_s.get_y(),)
-            
-            
-            
-            
-            if self.line_d[0] < 22:
-                for i in range(0, int(self.line_d[0]/3), 1):
-                    self.oled.circle(self.line_d[1], self.line_d[2], i * (self.line_d[0]&3) + 1, 1)
                     
-            else:
-                self.line_d[0] = 0
-                self.line_d[1] = random.randint(8, 112)
-                self.line_d[2] = random.randint(8, 56)
-            self.line_d[0] += 1 
-            
-            
-            
-            if self.line_d[3] < 8:
-                self.oled.circle(self.line_d[4], self.line_d[5], self.line_d[3] , 1)
-            else:
-                self.line_d[3] = 0
-                self.line_d[4] = random.randint(8, 112)
-                self.line_d[5] = random.randint(8, 56)
-            self.line_d[3] += 1 
-            
-            
-            
-            if self.line_d[6] < 20:
-                self.oled.rect(int(self.line_d[7]-self.line_d[6]/2), int(self.line_d[8] -self.line_d[6]/2), self.line_d[6],self.line_d[6], 1)
-            else:
-                self.line_d[6] = 0
-                self.line_d[7] = random.randint(20, 108)
-                self.line_d[8] = random.randint(20, 44)
-            self.line_d[6] += 1 
-            
-            
-            self.line_a.carry()
-            self.line_b.carry()
-            self.line_c.carry()
-            self.oled.triangle(self.line_a.get_x(), self.line_a.get_y(),self.line_b.get_x(), self.line_b.get_y(),self.line_c.get_x(), self.line_c.get_y(), 1)
-            
-            self.oled.show()
-            time.sleep_ms(10)
-            
-            
-            if self.version == "SCB_v2.0x":
-                self.rgb[0] = (random.randint(0,255), 0, 50)
-                self.rgb[1] = (0, random.randint(0,255), 50)
-                self.rgb[2] = (50, 50, random.randint(0,255))
-                self.rgb[3] = (0, random.randint(0,255), 100)
-                self.rgb.write()
-            
+        except Exception as e:
+            print(f"菜单显示失败: {e}")
     
-    
-    def temps(self):
-        if self.ok:
+    def text_demo(self):
+        """文字演示"""
+        try:
             self.oled.fill(0)
-            self.oled.framebuf.blit(self.t7,6,32)
-            self.oled.show()
-            maxtemp = 0
-        while self.ok:
-            
-            self.oled.fill(0)
-            
-            self.oled.rect(14, 5, 100, 5,1)
-            self.oled.rect(14, 15, 100, 5,1)
-            self.oled.rect(14, 25, 100, 5,1)
-            self.oled.text("R",0,5)
-            self.oled.text("G",0,15)
-            self.oled.text("B",0,25)
-            self.oled.fill_circle(self.ll + 13, self.lc + 2, 3, 1)
-            self.oled.framebuf.blit(self.t7,54,35)
-            
-            self.oled.show()
-            if self.button.value("上") and self.keydown:
-                self.keydown = 0
-                self.lc -=10
-                if self.lc < 1:
-                    self.lc = 5
-                if self.lc == 5:
-                    self.ll = int(self.lr /2)
-                if self.lc == 15:
-                    self.ll = int(self.lg /2)
-                if self.lc == 25:
-                    self.ll = int(self.lb /2)
-            elif self.button.value("上")==0 and self.keydown==0:
-                self.keydown = 1
-                
-            if self.button.value("下") and self.keyup:
-                self.keyup = 0
-                self.lc +=10
-                if self.lc > 26:
-                    self.lc = 25
-                if self.lc == 5:
-                    self.ll = int(self.lr /2)
-                if self.lc == 15:
-                    self.ll = int(self.lg /2)
-                if self.lc == 25:
-                    self.ll = int(self.lb /2)
-            elif self.button.value("下")==0 and self.keyup==0:
-                self.keyup = 1
-
-            if self.button.value("左"):
-                self.ll -=1
-                if self.ll < 0:
-                    self.ll = 0
-
-            if self.button.value("右"):
-                self.ll +=1
-                if self.ll > 101:
-                    self.ll = 101
-                
-            if self.lc == 5:
-                self.lr = self.ll * 2
-            if self.lc == 15:
-                self.lg = self.ll * 2
-            if self.lc == 25:
-                self.lb = self.ll * 2
-            
-            
-            self.rgb[0] = (self.lr, self.lg, self.lb)
-            self.rgb[1] = (self.lr, self.lg, self.lb)
-            self.rgb[2] = (self.lr, self.lg, self.lb)
-            self.rgb[3] = (self.lr, self.lg, self.lb)
-            self.rgb.write()
-            
-    
-    def light(self):
-    
-        if self.ok:
-            self.oled.fill(0)
-            self.oled.text("light value",20,0)
-            self.oled.framebuf.blit(self.t6,50,13)
-            self.oled.show()
-        
-        while self.ok:
-            guanmin = self.adc36.read()
-            self.oled.fill(0)
-            
-            self.oled.framebuf.blit(self.t6,50,13)
-            guanm = 4095-guanmin
-            for i in range(0, len(str(guanm)), 1):
-                self.oled.framebuf.blit(self.tx.get_24_text(int(str(guanm)[i])),32 + 18 * i,40)
-            
-            self.oled.text("light value",20,0)
-            self.oled.show()
-            time.sleep_ms(10)
-        
-    
-    
-    
-    def noise(self):
-        
-        
-        if self.ok:
-            self.zaoyindata = []
-            self.oled.fill(0)
-            self.oled.text("level of noise",10,0)
+            self.oled.text("Text Demo", 20, 10)
+            self.oled.text("Hello World!", 10, 30)
+            self.oled.text("Simple SCB", 15, 50)
             self.oled.show()
             
+            time.sleep_ms(2000)
             
-        while self.ok:
-            for i in range(0, 98, 1):
-                zaoyin = self.adc39.read()
-                if zaoyin > 10:
-                    self.zaoyindata.append(zaoyin)
-            if(len(self.zaoyindata)>0):
-                
-                zaoyins = sum(self.zaoyindata)/len(self.zaoyindata)
-                
+            # 滚动文字效果
+            for i in range(128):
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    break
+                    
                 self.oled.fill(0)
-                ls = int((zaoyins/450)*64)
-                self.oled.fill_rect(0, 64-ls, 20,ls,1)
+                self.oled.text("Scrolling", i, 30)
+                self.oled.show()
+                time.sleep_ms(50)
                 
-                aaa = int(ls*2.3)
-                #print(zaoyins)
-                for i in range(0, len(str(aaa)), 1):
-                    self.oled.framebuf.blit(self.tx.get_24_text(int(str(aaa)[i])),35 + 18 * i,32)
+        except Exception as e:
+            print(f"文字演示失败: {e}")
+    
+    def sound_demo(self):
+        """声音演示"""
+        try:
+            self.oled.fill(0)
+            self.oled.text("Sound Demo", 20, 10)
+            self.oled.text("Playing...", 20, 30)
+            self.oled.text("Press BACK to exit", 5, 50)
+            self.oled.show()
+            
+            # 播放音阶
+            frequencies = [200, 300, 400, 500, 600, 700, 800]
+            for freq in frequencies:
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    break
+                    
+                self.beep(freq, 200)
+                time.sleep_ms(100)
                 
-                self.oled.framebuf.blit(self.tx.get_24_text("d"),90,32)
-                self.oled.framebuf.blit(self.tx.get_24_text("B"),110,32)
-                self.oled.text("level of noise",10,0)
+        except Exception as e:
+            print(f"声音演示失败: {e}")
+    
+    def led_demo(self):
+        """LED演示"""
+        try:
+            self.oled.fill(0)
+            self.oled.text("LED Demo", 20, 10)
+            self.oled.text("Blinking...", 15, 30)
+            self.oled.text("Press BACK to exit", 5, 50)
+            self.oled.show()
+            
+            if self.led_pin:
+                # LED闪烁
+                for _ in range(20):  # 增加闪烁次数
+                    # 检查退出按键
+                    up, down, left, right, ok, back = self.read_buttons()
+                    if back:  # 返回键退出
+                        break
+                        
+                    self.led_pin.value(1)  # 点亮LED
+                    time.sleep_ms(200)
+                    self.led_pin.value(0)  # 熄灭LED
+                    time.sleep_ms(200)
+                    
+        except Exception as e:
+            print(f"LED演示失败: {e}")
+    
+    def game_demo(self):
+        """游戏演示"""
+        try:
+            self.oled.fill(0)
+            self.oled.text("Game Demo", 20, 10)
+            self.oled.text("Moving dot", 15, 30)
+            self.oled.text("Press BACK to exit", 5, 50)
+            self.oled.show()
+            
+            time.sleep_ms(1000)
+            
+            # 简单的移动点游戏
+            x, y = 64, 32
+            for _ in range(100):  # 增加游戏时长
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    break
+                    
+                self.oled.fill(0)
+                self.oled.text("Game Demo", 20, 10)
+                
+                # 绘制一个简单的点
+                self.oled.pixel(x, y, 1)
+                # 绘制一个小方块代替点，更容易看到
+                self.oled.fill_rect(x-1, y-1, 3, 3, 1)
+                
                 self.oled.show()
                 
-                if self.version == "SCB_v2.0j":
-                    self.pwm27.duty(int(zaoyins*2 + 20))
-                elif self.version == "SCB_v2.0x":
-                    self.rgb[0] = ( 0, 0,aaa)
-                    self.rgb[1] = ( 0, 0,aaa)
-                    self.rgb[2] = ( 0, 0,aaa)
-                    self.rgb[3] = ( 0, 0,aaa)
-                    self.rgb.write()
+                # 移动点
+                x = (x + 2) % 128
+                y = (y + 1) % 64
+                time.sleep_ms(100)
                 
-            self.zaoyindata = []
+        except Exception as e:
+            print(f"游戏演示失败: {e}")
     
-    
-    
-    def hertinfo(self):
-        #print("心率测试")
+    def run(self):
+        """主循环"""
+        print("开始运行简化版SCB...")
         
-        if self.ok:
-        
-            hei_num = 0
-            hei_num_eat = False
-            low_num = 0
-            hrd_list = []
-            hert_t = 3
-            time_tihs = 0
-            time_list = []
-            
-            red = []
-            ir = []
-             
-            my_hert = 0
-            my_blood = 0
-            pwmblood = 0
-            pwmbloodx = 0
-            isshowoled = 0
-            ishert = 0
-            
-            oled_poxel = []
-            for i in range(0, 111, 1):
-                oled_poxel.append(0)
+        while True:
+            try:
+                # 读取按键
+                up, down, left, right, ok, back = self.read_buttons()
                 
-            
-            for i in range(0, 10, 1):
-                time_list.append(800)
-            for i in range(0, 31, 1):
-                hrd_list.append(12345)
-                
-            self.oled.fill(0)
-            self.oled.text("hert and blood",10,0)
-            self.oled.text("Put a finger>>-",10,52)
-            self.oled.framebuf.blit(self.t4,50,15)
-            self.oled.show()
-        while self.ok:
-            hrd,ird = self.blood.get_hrir()
-
-            red.append(hrd)
-            ir.append(ird)
-            
-            hrd_list[30] = hrd 
-            for i in range(0, 30, 1):
-                hrd_list[i] = hrd_list[i+1]
-            mean_hr = sum(hrd_list)/31
-            chaval = hrd - mean_hr
-            #print(chaval)
-            if chaval<50 and chaval >-50:
-                ishert +=1
-            else:
-                ishert =0
-                
-            if chaval > 0:
-                hei_num += 1
-                if hei_num > hert_t:
-                    hei_num_eat = True
-                    hei_num = 0
-            
-            if hei_num_eat:
-                if chaval < 0:
-                    low_num += 1
-                    if low_num > hert_t:
-                        hei_num_eat = False
-                        systime = time.ticks_ms()
-                        hetime = systime - time_tihs
-                        time_tihs = systime
-                        low_num = 0
-                        
-                        if ishert < 18:
-                            pwmblood = 1024
-                            pwmbloodx = 255
-                            if hetime <1600 and hetime>400:
-                                time_list[9] = hetime
-                                for i in range(0, 9, 1):
-                                    time_list[i] = time_list[i+1]
-                            
-                            
-                            #print(time_list)
-                            hert = 600000 / (sum(time_list))
-                            #print("心率： "+ str(hert))
-                            my_hert = hert
-            
-            if self.version == "SCB_v2.0j":
-                self.pwm27.duty(pwmblood)
-                if pwmblood > 80:
-                    pwmblood -= 80
-                else:
-                    pwmblood = 0
-            elif self.version == "SCB_v2.0x":
-                if pwmbloodx > 20:
-                    pwmbloodx -= 20
-                else:
-                    pwmbloodx = 0
-                self.rgb[0] = ( 0,pwmbloodx, 0)
-                self.rgb[1] = ( 0,pwmbloodx, 0)
-                self.rgb[2] = ( 0,pwmbloodx, 0)
-                self.rgb[3] = ( 0,pwmbloodx, 0)
-                self.rgb.write()
-            
-            oled_poxel[110] = (chaval + 300)/20
-            self.oled.fill(0)
-            self.oled.text("hert and blood",10,0)
-            self.oled.text("HR:  " + str(int(my_hert)) + "bpm",0,10)
-            self.oled.text("SaO2:" + str(int(my_blood)) + "%",0,20)
-            
-            for i in range(0, 110, 1):
-                oled_poxel[i] = oled_poxel[i+1]
-                self.oled.pixel(i,int(oled_poxel[i] + 36),1)
-            for i in range(110, 128, 1):
-                self.oled.pixel(i,int(oled_poxel[110] + 36),1)
-            
-            self.oled.show()
-            
-            
-            isshowoled += 1
-            if isshowoled > 128 and ishert < 18:
-                isshowoled = 0
-                
-            if len(red)>100:
-                hr, hr_valid, spo2, spo2_valid = self.blood.calc_hr_and_spo2(ir, red)
-                #print("心率:" + str(hr) + "次/分钟")
-                #print("血氧: " + str(spo2) + "  %")
-                my_blood = spo2
-                red = []
-                ir = []
-            
-            
-            
-    
-    def triaxial(self):
-        #三轴
-        self.ok = False
-        xrest = 0
-        yrest = 0
-        while self.isstart:
-            
-            if self.ok:
-                self.ok = False
-                xrest = self.sanzhou.get_x()
-                yrest = self.sanzhou.get_y()
-            
-            sxp = []
-            syp = []
-            for i in range(0, 10, 1):
-                sx = self.sanzhou.get_x()
-                sy = self.sanzhou.get_y()
-
-                sxp.append(sx - xrest)
-                syp.append(sy - yrest)
-
-            sxpx = sum(sxp) / len(sxp)
-            sypy = sum(syp) / len(syp)
-
-            lingmidu = 66
-            if sxpx >= 28/lingmidu:
-                sxpx = 28/lingmidu
-            if sxpx <= -28/lingmidu:
-                sxpx = -28/lingmidu
-            if sypy >= 56/lingmidu:
-                sypy = 56/lingmidu
-            if sypy <= -49/lingmidu:
-                sypy = -49/lingmidu
-
-            statex = -int(sypy * lingmidu) + 64 - 8
-
-            statey = -int((sxpx * lingmidu)) + 32 - 4
-
-            self.oled.fill(0)
-            self.oled.text("^_^", statex,statey)
-            self.oled.show()
-
-    
-    def music(self):
-        #放歌
-        if self.isstart:
-            musics = Music()
-            self.ok = False
-            list_str = ["ENTERTAINER","DADADADUM","PRELUDE","ODE","NYAN","RINGTONE","FUNK","BLUES","BIRTHDAY","WEDDING","FUNERAL","PYTHON","BADDY","CHASE","BA_DING","WAWAWAWAA","JUMP_UP","JUMP_DOWN","POWER_UP","POWER_DOWN"    ]
-            list_music = [music.ENTERTAINER,music.DADADADUM,music.PRELUDE,music.ODE,music.NYAN,music.RINGTONE,music.FUNK,music.BLUES,music.BIRTHDAY,music.WEDDING,music.FUNERAL,music.PYTHON,music.BADDY,music.CHASE,music.BA_DING,music.WAWAWAWAA,music.JUMP_UP,music.JUMP_DOWN,music.POWER_UP,music.POWER_DOWN]
-
-            while self.isstart:
-                
-                if self.button.value("上") and self.keydown:
-                    self.keydown = 0
-                    print("上")
-                    if musics.get_music() > 0 : musics.set_music(musics.get_music()-1)
-                elif self.button.value("上")==0 and self.keydown==0:
-                    self.keydown = 1
-                    
-                if self.button.value("下") and self.keyup:
+                # 按键处理
+                if up and self.keyup:
                     self.keyup = 0
-                    print("下")
-                    if musics.get_music() < 19 :musics.set_music(musics.get_music()+1)
-                elif self.button.value("下")==0 and self.keyup==0:
+                    self.menuindex = (self.menuindex - 1) % 5
+                    self.show_menu()
+                    self.beep(300, 50)
+                elif not up:
                     self.keyup = 1
                     
-                if self.button.value("左") and self.keyleft:
+                if down and self.keydown:
+                    self.keydown = 0
+                    self.menuindex = (self.menuindex + 1) % 5
+                    self.show_menu()
+                    self.beep(300, 50)
+                elif not down:
+                    self.keydown = 1
+                    
+                if ok and self.keyleft:
                     self.keyleft = 0
-                    print("左")
-                    if musics.get_music() > 0 :musics.set_music(musics.get_music()-1)
-                elif self.button.value("左")==0 and self.keyleft==0:
+                    # 执行选中的功能
+                    if self.menuindex == 0:
+                        self.text_demo()
+                    elif self.menuindex == 1:
+                        self.sound_demo()
+                    elif self.menuindex == 2:
+                        self.led_demo()
+                    elif self.menuindex == 3:
+                        self.game_demo()
+                    elif self.menuindex == 4:
+                        print("退出程序")
+                        break
+                    self.show_menu()
+                elif not ok:
                     self.keyleft = 1
-                    
-                if self.button.value("右") and self.keyright:
-                    self.keyright = 0
-                    print("右")
-                    if musics.get_music() < 19 :musics.set_music(musics.get_music()+1)
-                elif self.button.value("右")==0 and self.keyright==0:
-                    self.keyright = 1
-                    
-                self.oled.fill(0)
-                self.oled.text("    music",0,0)
-                self.oled.text("num: " + str(musics.get_music()),0,16)
-                self.oled.text("name: " + list_str[musics.get_music()],0,32)
-                self.oled.show()
                 
-                if self.ok:
-                    music.play(list_music[musics.get_music()], 25)
-                    self.ok = False
-            
-    
-    def moveball(self):
-    
-        #小球移动
-        okstart = True
-        self.ok = False
-        ballr = 4
-        isbig = False
-        
-        if self.ok:
-            self.spx = random.randint(0, 7)
-            self.spy = random.randint(0, 3)
-        
-        while self.isstart:
-            for i in range(0, 128, 16):
-                for j in range(0, 64, 16):
-                    self.oled.framebuf.blit(self.fangge16,i,j)
-            
-            if self.button.value("上") and self.keydown:
-                self.keydown = 0
-                print("上")
-                okstart = True
-                if( self.qiuti16s.get_qiuti16y()>0):
-                    self.qiuti16s.set_qiuti16y(self.qiuti16s.get_qiuti16y()-1)
-            elif self.button.value("上")==0 and self.keydown==0:
-                self.keydown = 1
+                # 显示菜单
+                if not self.menu:
+                    self.menu = True
+                    self.show_menu()
                 
-            if self.button.value("下") and self.keyup:
-                self.keyup = 0
-                print("下")
-                okstart = True
-                if(self.qiuti16s.get_qiuti16y()<3 ):
-                    self.qiuti16s.set_qiuti16y(self.qiuti16s.get_qiuti16y()+1)
-            elif self.button.value("下")==0 and self.keyup==0:
-                self.keyup = 1
+                time.sleep_ms(50)
                 
-            if self.button.value("左") and self.keyleft:
-                self.keyleft = 0
-                print("左")
-                okstart = True
-                if(self.qiuti16s.get_qiuti16x()>0):
-                    self.qiuti16s.set_qiuti16x(self.qiuti16s.get_qiuti16x()-1)
-                
-            elif self.button.value("左")==0 and self.keyleft==0:
-                self.keyleft = 1
-                
-            if self.button.value("右") and self.keyright:
-                self.keyright = 0
-                print("右")
-                okstart = True
-                if(self.qiuti16s.get_qiuti16x()<7):
-                    self.qiuti16s.set_qiuti16x(self.qiuti16s.get_qiuti16x()+1)
-                
-            elif self.button.value("右")==0 and self.keyright==0:
-                self.keyright = 1
-                
-            x = self.qiuti16s.get_qiuti16x()
-            y = self.qiuti16s.get_qiuti16y()
-            self.oled.framebuf.blit(self.qiuti16xiaolian,x*16,y*16)
-   
-            if x == self.spx and y == self.spy:
-                isbig = True
-                
-            if isbig:
-                ballr+=1
-            if ballr > 65:
-                isbig = False
-                self.spx = random.randint(0, 7)
-                self.spy = random.randint(0, 3)
-                ballr = 4
-            
-            #print(str(self.spx) + str(self.spy))
-            r = int(ballr/16)
-            if ballr < 16:
-                self.oled.circle(self.spx * 16 + 7, self.spy * 16 + 7, ballr, 1)  
-            else:
-                for i in range(0, 2 , 1):
-                    
-                    self.oled.circle(self.spx * 16 + 7, self.spy * 16 + 7, i * 8 + ballr, 1)  
-                    
-            self.oled.show()
-                
-            if okstart:
-                okstart = False
-                if self.version == "SCB_v2.0j":
-                    self.pwm27.duty( x*150 + y*88 + 100)
-                elif self.version == "SCB_v2.0x":
-                    self.rgb[0] = (random.randint(0,255), random.randint(0,255), random.randint(0,255))
-                    self.rgb[1] = (random.randint(0,255), random.randint(0,255), random.randint(0,255))
-                    self.rgb[2] = (random.randint(0,255), random.randint(0,255), random.randint(0,255))
-                    self.rgb[3] = (random.randint(0,255), random.randint(0,255), random.randint(0,255))
-                    self.rgb.write()
-                    
-                try:
-                    music.pitch_time(25, x*150 + y*88 + 100, 100)
-                except:
-                    music.pitch(25, x*150 + y*88 + 100, 100)
-            if self.ok:
-                try:
-                    music.pitch_time(25, x*150 + y*88 + 100, 500)
-                except:
-                    music.pitch(25, x*150 + y*88 + 100, 500)
-                self.ok = False
-            
-        
+            except Exception as e:
+                print(f"主循环错误: {e}")
+                time.sleep_ms(1000)
 
-    def attachInterrupt_funmenu(self,x):
-        print('menu')
-        self.menu = True
-        self.ok = False
-        self.isstart = False
-    def attachInterrupt_funok(self,x):
-        print('ok')
-        self.ok = True
-        self.isstart = True
-    
-        
-
-
-
-class Qiuti16(object):
-    qiuti16x = 4
-    qiuti16y = 2
-    def get_qiuti16x(self):
-        return Qiuti16.qiuti16x
-    def set_qiuti16x(self, qiuti16x):
-        Qiuti16.qiuti16x = qiuti16x
-    def get_qiuti16y(self):
-        return Qiuti16.qiuti16y
-    def set_qiuti16y(self, qiuti16y):
-        Qiuti16.qiuti16y = qiuti16y
-
-class Music(object):
-    music = 0
-    def get_music(self):
-        return Music.music
-    def set_music(self, music):
-        Music.music = music
-
-
-
-
-
-
+# 使用示例
+if __name__ == "__main__":
+    scb = SimpleSCBord()
+    scb.run() 

@@ -1,6 +1,6 @@
 import time
 import machine
-import SCBord_port
+# 移除SCBord_port依赖，使用原生I2C
 
 #血氧初始化
 class Xueyang():
@@ -132,16 +132,61 @@ class Xueyang():
 #科创板血氧
 class blood():
     def __init__(self):
-
-
-        self.SCB = SCBord_port.SCBord_port(1)
+        # 尝试不同的I2C引脚配置来寻找血氧传感器(地址87)
+        self.i2c_configs = [
+            (4, 15),   # SDA=4, SCL=15
+            (5, 18),   # SDA=5, SCL=18  
+            (21, 22),  # SDA=21, SCL=22
+            (13, 14)   # SDA=13, SCL=14
+        ]
+        
+        self.i2cxueyang = None
+        
         try:
             self.xueyang = Xueyang()
-            self.i2cxueyang = self.SCB.get_sen_i2c(87)
-
-
-        except:
-            pass
+            # 快速找到血氧传感器 - 优先尝试常用配置
+            common_configs = [
+                (21, 22),  # SDA=21, SCL=22 (最常用)
+                (4, 15),   # SDA=4, SCL=15
+            ]
+            
+            success = False
+            
+            # 第一轮：尝试最常用的配置
+            for sda, scl in common_configs:
+                try:
+                    # 使用较低频率和超时，提高兼容性和速度
+                    i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                    devices = i2c.scan()
+                    if 87 in devices:  # 血氧传感器地址
+                        self.i2cxueyang = i2c
+                        print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
+                        success = True
+                        break
+                except:
+                    continue
+            
+            # 第二轮：如果常用配置失败，尝试其他配置
+            if not success:
+                fallback_configs = [(5, 18), (13, 14)]
+                for sda, scl in fallback_configs:
+                    try:
+                        i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                        devices = i2c.scan()
+                        if 87 in devices:
+                            self.i2cxueyang = i2c
+                            print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
+                            success = True
+                            break
+                    except:
+                        continue
+                        
+            if not success:
+                print("[BLOOD] 未找到血氧传感器，将跳过血氧功能")
+                self.i2cxueyang = None
+                
+        except Exception as e:
+            print(f"[BLOOD] 初始化失败: {e}")
         self.bloodbool = True
         self.REG_FIFO_DATA = 7
         self.REG_INTR_STATUS_1 = 0
