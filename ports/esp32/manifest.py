@@ -10,6 +10,7 @@ freeze("frozen", (
     "tm1650.py",
     "SPL06.py",
     "servo.py",
+    "dhtx.py",
     "mqtt.py",
     "mpu9250.py",
     "AHT20.py",
@@ -34,6 +35,7 @@ freeze("frozen", (
     "mixpy.py",
     "MSA301.py",
     "music_backup.py",
+    "ds18x20x.py",
     "oled.py",
     "ori.py",
     "pca9685.py",
@@ -46,6 +48,5 @@ freeze("frozen", (
     "sonar.py",
     "zkspres.py",
     "zkspsimplev20.py",
-    "dual_channel_service.py"
-
+    "send_fucking_data.py",
 ), opt=0)
