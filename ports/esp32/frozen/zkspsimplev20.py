@@ -1,6 +1,8 @@
 import machine
 import time
 import ssd1306
+import random
+import neopixel
 
 # 简化版科创板演示代码 - 最小依赖版本
 
@@ -42,15 +44,32 @@ class SimpleSCBord():
             self.pin5 = machine.Pin(5, machine.Pin.IN)    # 确认
             self.pin19 = machine.Pin(19, machine.Pin.IN)  # 返回
             
-            # 初始化LED (使用PWM控制)
+            # 初始化RGB LED (NeoPixel)
             try:
-                self.led_pin = machine.Pin(23, machine.Pin.OUT)
-                self.led_pin.value(0)
+                self.rgb_leds = neopixel.NeoPixel(machine.Pin(23), 4)
+                # 初始化时关闭所有LED
+                for i in range(4):
+                    self.rgb_leds[i] = (0, 0, 0)
+                self.rgb_leds.write()
             except:
-                self.led_pin = None
+                self.rgb_leds = None
                 
             # 初始化蜂鸣器
             self.buzzer = machine.Pin(25, machine.Pin.OUT)
+            
+            # 初始化光敏传感器 (ADC)
+            try:
+                self.light_sensor = machine.ADC(machine.Pin(36))  # VP引脚
+                self.light_sensor.atten(machine.ADC.ATTN_11DB)  # 0-3.3V
+            except:
+                self.light_sensor = None
+                
+            # 初始化声音传感器 (ADC)
+            try:
+                self.sound_sensor = machine.ADC(machine.Pin(39))  # VN引脚
+                self.sound_sensor.atten(machine.ADC.ATTN_11DB)  # 0-3.3V
+            except:
+                self.sound_sensor = None
             
             print("硬件初始化完成")
             
@@ -108,10 +127,10 @@ class SimpleSCBord():
             
             menu_items = [
                 "1. Text Demo",
-                "2. Sound Demo", 
-                "3. LED Demo",
-                "4. Game Demo",
-                "5. Exit"
+                "2. Music Demo", 
+                "3. LED Random",
+                "4. Light Sensor",
+                "5. Snake Game"
             ]
             
             for i, item in enumerate(menu_items):
@@ -151,90 +170,330 @@ class SimpleSCBord():
         except Exception as e:
             print(f"文字演示失败: {e}")
     
-    def sound_demo(self):
-        """声音演示"""
+    def music_demo(self):
+        """音乐演示 - 随机播放多种音乐"""
         try:
+            # 定义多种音乐
+            music_library = {
+                "TWINKLE": [
+                    (262, 200), (262, 200), (392, 200), (392, 200),  # Do Do Sol Sol
+                    (440, 200), (440, 200), (392, 400),             # La La Sol
+                    (349, 200), (349, 200), (330, 200), (330, 200), # Fa Fa Mi Mi
+                    (294, 200), (294, 200), (262, 400),             # Re Re Do
+                    (392, 200), (392, 200), (349, 200), (349, 200), # Sol Sol Fa Fa
+                    (330, 200), (330, 200), (294, 400),             # Mi Mi Re
+                    (262, 200), (262, 200), (392, 200), (392, 200), # Do Do Sol Sol
+                    (440, 200), (440, 200), (392, 400),             # La La Sol
+                    (349, 200), (349, 200), (330, 200), (330, 200), # Fa Fa Mi Mi
+                    (294, 200), (294, 200), (262, 400)              # Re Re Do
+                ],
+                "BIRTHDAY": [
+                    (262, 300), (262, 100), (294, 300), (262, 300), (349, 300), (330, 600),  # Happy Birthday to you
+                    (262, 300), (262, 100), (294, 300), (262, 300), (392, 300), (349, 600),  # Happy Birthday to you
+                    (262, 300), (262, 100), (523, 300), (440, 300), (349, 300), (330, 300), (294, 600),  # Happy Birthday dear
+                    (466, 300), (466, 100), (440, 300), (349, 300), (392, 300), (349, 600)   # Happy Birthday to you
+                ],
+                "BLUES": [
+                    (220, 400), (196, 200), (220, 400), (196, 200),  # Blues progression
+                    (220, 400), (196, 200), (220, 400), (196, 200),
+                    (247, 400), (220, 200), (247, 400), (220, 200),
+                    (262, 400), (247, 200), (262, 400), (247, 200),
+                    (220, 400), (196, 200), (220, 400), (196, 200)
+                ],
+                "FUNK": [
+                    (330, 150), (0, 50), (330, 150), (0, 50), (330, 150), (0, 50), (330, 150), (0, 50),  # Funky rhythm
+                    (349, 150), (0, 50), (349, 150), (0, 50), (349, 150), (0, 50), (349, 150), (0, 50),
+                    (392, 150), (0, 50), (392, 150), (0, 50), (392, 150), (0, 50), (392, 150), (0, 50),
+                    (440, 300), (392, 300), (349, 300), (330, 300)
+                ],
+                "ODE": [
+                    (262, 400), (330, 400), (392, 400), (523, 800),  # Ode to Joy theme
+                    (523, 400), (587, 400), (659, 400), (698, 800),
+                    (698, 400), (659, 400), (587, 400), (523, 800),
+                    (523, 400), (392, 400), (440, 400), (494, 800)
+                ],
+                "NYAN": [
+                    (523, 100), (659, 100), (784, 100), (1047, 100),  # Nyan Cat style
+                    (784, 100), (659, 100), (523, 100), (440, 100),
+                    (523, 100), (659, 100), (784, 100), (1047, 100),
+                    (784, 100), (659, 100), (523, 100), (440, 100)
+                ],
+                "WEDDING": [
+                    (262, 400), (330, 400), (392, 400), (523, 800),  # Wedding March
+                    (523, 400), (587, 400), (659, 400), (698, 800),
+                    (698, 400), (659, 400), (587, 400), (523, 800),
+                    (523, 400), (392, 400), (330, 400), (262, 800)
+                ],
+                "FUNERAL": [
+                    (196, 600), (174, 600), (196, 600), (174, 600),  # Funeral March
+                    (174, 600), (155, 600), (174, 600), (155, 600),
+                    (155, 600), (146, 600), (155, 600), (146, 600),
+                    (146, 600), (130, 600), (146, 600), (130, 600)
+                ],
+                "DADADADUM": [
+                    (196, 200), (196, 200), (196, 200), (196, 200),  # Beethoven's 5th
+                    (196, 200), (196, 200), (196, 200), (196, 200),
+                    (196, 200), (196, 200), (196, 200), (196, 200),
+                    (196, 200), (196, 200), (196, 200), (196, 200),
+                    (220, 400), (220, 400), (220, 400), (220, 400)
+                ],
+                "PRELUDE": [
+                    (262, 300), (330, 300), (392, 300), (523, 300),  # Prelude in C
+                    (523, 300), (392, 300), (330, 300), (262, 300),
+                    (262, 300), (330, 300), (392, 300), (523, 300),
+                    (523, 300), (392, 300), (330, 300), (262, 300)
+                ]
+            }
+            
+            # 随机选择一首音乐
+            music_names = list(music_library.keys())
+            selected_music = random.choice(music_names)
+            notes = music_library[selected_music]
+            
             self.oled.fill(0)
-            self.oled.text("Sound Demo", 20, 10)
-            self.oled.text("Playing...", 20, 30)
+            self.oled.text("Music Demo", 20, 10)
+            self.oled.text("Playing: " + selected_music, 5, 30)
             self.oled.text("Press BACK to exit", 5, 50)
             self.oled.show()
             
-            # 播放音阶
-            frequencies = [200, 300, 400, 500, 600, 700, 800]
-            for freq in frequencies:
+            for freq, duration in notes:
                 # 检查退出按键
                 up, down, left, right, ok, back = self.read_buttons()
                 if back:  # 返回键退出
                     break
                     
-                self.beep(freq, 200)
-                time.sleep_ms(100)
+                if freq > 0:  # 只播放非零频率的音符
+                    self.beep(freq, duration)
+                else:
+                    time.sleep_ms(duration)  # 静音
+                time.sleep_ms(50)
                 
         except Exception as e:
-            print(f"声音演示失败: {e}")
+            print(f"音乐演示失败: {e}")
     
-    def led_demo(self):
-        """LED演示"""
+    def led_random_demo(self):
+        """RGB LED随机演示"""
         try:
             self.oled.fill(0)
-            self.oled.text("LED Demo", 20, 10)
-            self.oled.text("Blinking...", 15, 30)
+            self.oled.text("RGB LED Random", 15, 10)
+            self.oled.text("Random colors", 10, 30)
             self.oled.text("Press BACK to exit", 5, 50)
             self.oled.show()
             
-            if self.led_pin:
-                # LED闪烁
-                for _ in range(20):  # 增加闪烁次数
+            if self.rgb_leds:
+                # RGB LED随机颜色演示
+                for _ in range(16):  # 增加演示次数
                     # 检查退出按键
                     up, down, left, right, ok, back = self.read_buttons()
                     if back:  # 返回键退出
                         break
-                        
-                    self.led_pin.value(1)  # 点亮LED
-                    time.sleep_ms(200)
-                    self.led_pin.value(0)  # 熄灭LED
-                    time.sleep_ms(200)
+                    
+                    # 随机选择LED和颜色
+                    led_index = random.randint(0, 3)  # 选择0-3号LED
+                    r = random.randint(0, 255)  # 随机红色值
+                    g = random.randint(0, 255)  # 随机绿色值
+                    b = random.randint(0, 255)  # 随机蓝色值
+                    
+                    # 先关闭所有LED
+                    for i in range(4):
+                        self.rgb_leds[i] = (0, 0, 0)
+                    
+                    # 点亮选中的LED
+                    self.rgb_leds[led_index] = (r, g, b)
+                    self.rgb_leds.write()
+                    
+                    # 在OLED上显示当前状态
+                    self.oled.fill(0)
+                    self.oled.text("RGB LED Random", 15, 5)
+                    self.oled.text(f"LED {led_index}: ({r},{g},{b})", 5, 20)
+                    self.oled.text("Random colors", 10, 35)
+                    self.oled.text("Press BACK to exit", 5, 55)
+                    self.oled.show()
+                    
+                    # 随机延时
+                    delay = random.randint(100, 800)
+                    time.sleep_ms(delay)
+                    
+                # 演示结束后关闭所有LED
+                for i in range(4):
+                    self.rgb_leds[i] = (0, 0, 0)
+                self.rgb_leds.write()
                     
         except Exception as e:
-            print(f"LED演示失败: {e}")
+            print(f"RGB LED随机演示失败: {e}")
     
-    def game_demo(self):
-        """游戏演示"""
+    def light_sensor_demo(self):
+        """光敏传感器演示"""
         try:
-            self.oled.fill(0)
-            self.oled.text("Game Demo", 20, 10)
-            self.oled.text("Moving dot", 15, 30)
-            self.oled.text("Press BACK to exit", 5, 50)
-            self.oled.show()
-            
-            time.sleep_ms(1000)
-            
-            # 简单的移动点游戏
-            x, y = 64, 32
-            for _ in range(100):  # 增加游戏时长
+            if not self.light_sensor:
+                self.oled.fill(0)
+                self.oled.text("Light Sensor", 15, 10)
+                self.oled.text("Not available", 10, 30)
+                self.oled.text("Press BACK to exit", 5, 50)
+                self.oled.show()
+                time.sleep_ms(2000)
+                return
+                
+            # 光敏传感器实时显示
+            for _ in range(200):  # 运行200次循环
                 # 检查退出按键
                 up, down, left, right, ok, back = self.read_buttons()
                 if back:  # 返回键退出
                     break
-                    
+                
+                # 读取光敏传感器值
+                light_value = self.light_sensor.read()
+                
+                # 清屏并显示信息
                 self.oled.fill(0)
-                self.oled.text("Game Demo", 20, 10)
+                self.oled.text("Light Sensor", 15, 5)
+                self.oled.text("Value: " + str(light_value), 5, 20)
                 
-                # 绘制一个简单的点
-                self.oled.pixel(x, y, 1)
-                # 绘制一个小方块代替点，更容易看到
-                self.oled.fill_rect(x-1, y-1, 3, 3, 1)
+                # 绘制光强度条形图
+                bar_width = int(light_value / 4095 * 120)  # 映射到0-120像素
+                self.oled.text("Light Level:", 5, 35)
+                self.oled.fill_rect(5, 45, bar_width, 8, 1)
+                self.oled.rect(5, 45, 120, 8, 1)  # 边框
                 
+                # 显示状态
+                if light_value < 1000:
+                    status = "Dark"
+                elif light_value < 2000:
+                    status = "Dim"
+                elif light_value < 3000:
+                    status = "Normal"
+                else:
+                    status = "Bright"
+                    
+                self.oled.text("Status: " + status, 5, 55)
                 self.oled.show()
                 
-                # 移动点
-                x = (x + 2) % 128
-                y = (y + 1) % 64
                 time.sleep_ms(100)
                 
         except Exception as e:
-            print(f"游戏演示失败: {e}")
+            print(f"光敏传感器演示失败: {e}")
+    
+    def snake_game(self):
+        """贪吃蛇游戏"""
+        try:
+            # 游戏参数
+            width, height = 16, 8  # 游戏区域大小 (16x8 像素块)
+            pixel_size = 8  # 每个像素块的大小
+            
+            # 初始化蛇的位置和方向
+            snake = [(8, 4)]  # 蛇头在中心
+            direction = (1, 0)  # 初始向右移动
+            food = (12, 4)  # 食物位置
+            score = 0
+            game_speed = 300  # 游戏速度(ms)
+            
+            # 显示游戏开始界面
+            self.oled.fill(0)
+            self.oled.text("Snake Game", 20, 10)
+            self.oled.text("Use keys to move", 5, 30)
+            self.oled.text("Press OK to start", 5, 50)
+            self.oled.show()
+            
+            # 等待开始
+            while True:
+                up, down, left, right, ok, back = self.read_buttons()
+                if ok:
+                    break
+                if back:
+                    return
+                time.sleep_ms(100)
+            
+            # 游戏主循环
+            while True:
+                # 读取按键
+                up, down, left, right, ok, back = self.read_buttons()
+                
+                # 处理方向控制
+                if up and direction != (0, 1):
+                    direction = (0, -1)
+                elif down and direction != (0, -1):
+                    direction = (0, 1)
+                elif left and direction != (1, 0):
+                    direction = (-1, 0)
+                elif right and direction != (-1, 0):
+                    direction = (1, 0)
+                
+                # 检查退出
+                if back:
+                    break
+                
+                # 移动蛇头
+                new_head = (snake[0][0] + direction[0], snake[0][1] + direction[1])
+                
+                # 检查边界碰撞
+                if (new_head[0] < 0 or new_head[0] >= width or 
+                    new_head[1] < 0 or new_head[1] >= height):
+                    break  # 游戏结束
+                
+                # 检查自身碰撞
+                if new_head in snake:
+                    break  # 游戏结束
+                
+                # 添加新蛇头
+                snake.insert(0, new_head)
+                
+                # 检查是否吃到食物
+                if new_head == food:
+                    score += 1
+                    # 生成新的食物位置
+                    while True:
+                        food = (random.randint(0, width-1), random.randint(0, height-1))
+                        if food not in snake:
+                            break
+                    # 增加游戏速度
+                    game_speed = max(100, game_speed - 10)
+                else:
+                    # 没吃到食物，移除蛇尾
+                    snake.pop()
+                
+                # 绘制游戏画面
+                self.oled.fill(0)
+                
+                # 绘制蛇
+                for segment in snake:
+                    x = segment[0] * pixel_size
+                    y = segment[1] * pixel_size
+                    self.oled.fill_rect(x, y, pixel_size-1, pixel_size-1, 1)
+                
+                # 绘制食物
+                food_x = food[0] * pixel_size
+                food_y = food[1] * pixel_size
+                self.oled.fill_rect(food_x, food_y, pixel_size-1, pixel_size-1, 1)
+                
+                # 显示分数
+                self.oled.text("Score: " + str(score), 0, 0)
+                
+                self.oled.show()
+                
+                # 游戏延时
+                time.sleep_ms(game_speed)
+            
+            # 游戏结束界面
+            self.oled.fill(0)
+            self.oled.text("Game Over!", 25, 20)
+            self.oled.text("Score: " + str(score), 25, 35)
+            self.oled.text("Press BACK", 25, 50)
+            self.oled.show()
+            
+            # 播放游戏结束音效
+            self.beep(200, 300)
+            time.sleep_ms(100)
+            self.beep(150, 300)
+            
+            # 等待退出
+            while True:
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:
+                    break
+                time.sleep_ms(100)
+                
+        except Exception as e:
+            print(f"贪吃蛇游戏失败: {e}")
     
     def run(self):
         """主循环"""
@@ -268,14 +527,13 @@ class SimpleSCBord():
                     if self.menuindex == 0:
                         self.text_demo()
                     elif self.menuindex == 1:
-                        self.sound_demo()
+                        self.music_demo()
                     elif self.menuindex == 2:
-                        self.led_demo()
+                        self.led_random_demo()
                     elif self.menuindex == 3:
-                        self.game_demo()
+                        self.light_sensor_demo()
                     elif self.menuindex == 4:
-                        print("退出程序")
-                        break
+                        self.snake_game()
                     self.show_menu()
                 elif not ok:
                     self.keyleft = 1
