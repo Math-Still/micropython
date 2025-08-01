@@ -5,9 +5,6 @@ import machine
 #血氧初始化
 class Xueyang():
     def __init__(self):
-        self.SAMPLE_FREQ = 25
-        self.MA_SIZE = 4
-        self.BUFFER_SIZE = 100
         self.funs = Funs()
         self.SAMPLE_FREQ = 25
         self.MA_SIZE = 4
@@ -132,61 +129,53 @@ class Xueyang():
 #科创板血氧
 class blood():
     def __init__(self):
-        # 尝试不同的I2C引脚配置来寻找血氧传感器(地址87)
-        self.i2c_configs = [
-            (4, 15),   # SDA=4, SCL=15
-            (5, 18),   # SDA=5, SCL=18  
-            (21, 22),  # SDA=21, SCL=22
-            (13, 14)   # SDA=13, SCL=14
-        ]
-        
         self.i2cxueyang = None
+        self._device_found = False  # 添加设备检测标志
         
         try:
             self.xueyang = Xueyang()
             # 快速找到血氧传感器 - 优先尝试常用配置
             common_configs = [
                 (21, 22),  # SDA=21, SCL=22 (最常用)
-                (4, 15),   # SDA=4, SCL=15
             ]
             
             success = False
             
-            # 第一轮：尝试最常用的配置
-            for sda, scl in common_configs:
+            # 尝试连接血氧传感器
+            for scl, sda in common_configs:
                 try:
-                    # 使用较低频率和超时，提高兼容性和速度
-                    i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
+                    print(f"[BLOOD] 尝试连接血氧传感器 - SDA:{sda}, SCL:{scl}")
+                    i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000)
+                    
+                    # 扫描I2C设备
                     devices = i2c.scan()
+                    print(f"[BLOOD] 发现的I2C设备: {devices}")
+                    
                     if 87 in devices:  # 血氧传感器地址
                         self.i2cxueyang = i2c
-                        print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
+                        self._device_found = True
                         success = True
+                        print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
                         break
-                except:
+                    else:
+                        print(f"[BLOOD] 在地址87未找到血氧传感器")
+                        # 释放I2C资源
+                        del i2c
+                        
+                except Exception as e:
+                    print(f"[BLOOD] 连接血氧传感器失败 - SDA:{sda}, SCL:{scl}: {e}")
                     continue
             
-            # 第二轮：如果常用配置失败，尝试其他配置
-            if not success:
-                fallback_configs = [(5, 18), (13, 14)]
-                for sda, scl in fallback_configs:
-                    try:
-                        i2c = machine.I2C(scl=machine.Pin(scl), sda=machine.Pin(sda), freq=100000, timeout=1000)
-                        devices = i2c.scan()
-                        if 87 in devices:
-                            self.i2cxueyang = i2c
-                            print(f"[BLOOD] 血氧传感器找到 - SDA:{sda}, SCL:{scl}")
-                            success = True
-                            break
-                    except:
-                        continue
-                        
             if not success:
                 print("[BLOOD] 未找到血氧传感器，将跳过血氧功能")
                 self.i2cxueyang = None
+                self._device_found = False
                 
         except Exception as e:
             print(f"[BLOOD] 初始化失败: {e}")
+            self.i2cxueyang = None
+            self._device_found = False
+            
         self.bloodbool = True
         self.REG_FIFO_DATA = 7
         self.REG_INTR_STATUS_1 = 0
@@ -204,70 +193,106 @@ class blood():
         self.isstate = 0
         for l in range(0, 8, 1):
             self.frequency_time.append(0)
+
+    def _check_device(self):
+        """检查设备是否可用"""
+        if not self._device_found or not self.i2cxueyang:
+            return False
+        try:
+            # 尝试读取设备ID来验证设备是否响应
+            device_id = self.i2cxueyang.readfrom_mem(87, 255, 1, addrsize=8)  # PART_ID register
+            return True
+        except Exception as e:
+            print(f"[BLOOD] 设备检查失败: {e}")
+            self._device_found = False
+            return False
+
     def get_hrir(self):
-        if self.isstate != 1:
-            self.isstate  = 1
-            self.xueyang.setup(self.i2cxueyang)
-        reg_INTR1 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_1,1,addrsize=8)
-        reg_INTR2 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_2,1,addrsize=8)
-        d = self.i2cxueyang.readfrom_mem(87, self.REG_FIFO_DATA,6,addrsize=8)
-        hr = ((((d[0]<<16)|(d[1]<<8))|d[2])&262143)
-        ir = ((((d[3]<<16)|(d[4]<<8))|d[5])&262143)
-        #time.sleep_ms(22)
-        return (hr,ir)
-    def start(self):
-        if self.isstate  != 2:
-            self.isstate  = 2
-            self.xueyang.setup(self.i2cxueyang)
-        while self.bloodbool:
+        if not self._check_device():
+            print("[BLOOD] 血氧传感器不可用")
+            return (0, 0)
+            
+        try:
+            if self.isstate != 1:
+                self.isstate = 1
+                self.xueyang.setup(self.i2cxueyang)
             reg_INTR1 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_1,1,addrsize=8)
             reg_INTR2 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_2,1,addrsize=8)
             d = self.i2cxueyang.readfrom_mem(87, self.REG_FIFO_DATA,6,addrsize=8)
-            time.sleep_ms(20)
-            newhr = ((((d[0]<<16)|(d[1]<<8))|d[2])&262143)
-            self.red.append(newhr)
-            self.ir.append(((((d[3]<<16)|(d[4]<<8))|d[5])&262143))
+            hr = ((((d[0]<<16)|(d[1]<<8))|d[2])&262143)
+            ir = ((((d[3]<<16)|(d[4]<<8))|d[5])&262143)
+            return (hr,ir)
+        except Exception as e:
+            print(f"[BLOOD] 读取心率数据失败: {e}")
+            return (0, 0)
 
-            if(newhr>self.oldhr):
-                self.hehthr = newhr
-            if(newhr<self.oldhr):
-                self.lowehr = newhr
-            blood = self.hehthr-self.lowehr
-            ddd = ((1024-blood)-458)/100
-            #print(blood)
-            if ddd>1.6:
-                if self.frequency >=0:
-                    self.frequency += 1
-                    if self.frequency >3:
-                        timedd = time.ticks_ms()
-                        self.frequency_time[7] = timedd
-                        self.frequency = -1
-                        for j in range(0, 7, 1):
-                            self.frequency_time[j] = self.frequency_time[j + 1]
-                        #print(self.frequency_time)
-                        hrtime = []
-                        for k in range(0, 6, 1):
-                            ahr = int(self.frequency_time[k+1]-self.frequency_time[k])
-                            if 200 < ahr < 2000:
-                                hrtime.append(ahr)
-                        #print(hrtime)
-                        try:
-                            self.htnum = 60/(sum(hrtime)/6000)
-                            print(str(round(self.htnum,2)))
-                            return hrtime
-                        except:
-                            pass
-            else :
-                self.frequency = 0
-            self.oldhr = newhr
+    def start(self):
+        if not self._check_device():
+            print("[BLOOD] 血氧传感器不可用，无法启动监测")
+            return ""
+            
+        try:
+            if self.isstate != 2:
+                self.isstate = 2
+                self.xueyang.setup(self.i2cxueyang)
+            
+            while self.bloodbool:
+                try:
+                    reg_INTR1 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_1,1,addrsize=8)
+                    reg_INTR2 = self.i2cxueyang.readfrom_mem(87, self.REG_INTR_STATUS_2,1,addrsize=8)
+                    d = self.i2cxueyang.readfrom_mem(87, self.REG_FIFO_DATA,6,addrsize=8)
+                    time.sleep_ms(20)
+                    newhr = ((((d[0]<<16)|(d[1]<<8))|d[2])&262143)
+                    self.red.append(newhr)
+                    self.ir.append(((((d[3]<<16)|(d[4]<<8))|d[5])&262143))
 
-            if len(self.red)>100:
-                hr, hr_valid, spo2, spo2_valid = self.xueyang.calc_hr_and_spo2(self.ir, self.red)
-                if spo2 >10:
-                    self.spo2x = spo2
-                    #print("spo2   " + str(spo2))
-                self.red = []
-                self.ir = []
+                    if(newhr>self.oldhr):
+                        self.hehthr = newhr
+                    if(newhr<self.oldhr):
+                        self.lowehr = newhr
+                    blood = self.hehthr-self.lowehr
+                    ddd = ((1024-blood)-458)/100
+                    
+                    if ddd>1.6:
+                        if self.frequency >=0:
+                            self.frequency += 1
+                            if self.frequency >3:
+                                timedd = time.ticks_ms()
+                                self.frequency_time[7] = timedd
+                                self.frequency = -1
+                                for j in range(0, 7, 1):
+                                    self.frequency_time[j] = self.frequency_time[j + 1]
+                                
+                                hrtime = []
+                                for k in range(0, 6, 1):
+                                    ahr = int(self.frequency_time[k+1]-self.frequency_time[k])
+                                    if 200 < ahr < 2000:
+                                        hrtime.append(ahr)
+                                
+                                try:
+                                    self.htnum = 60/(sum(hrtime)/6000)
+                                    print(str(round(self.htnum,2)))
+                                    return hrtime
+                                except:
+                                    pass
+                    else:
+                        self.frequency = 0
+                    self.oldhr = newhr
+
+                    if len(self.red)>100:
+                        hr, hr_valid, spo2, spo2_valid = self.xueyang.calc_hr_and_spo2(self.ir, self.red)
+                        if spo2 >10:
+                            self.spo2x = spo2
+                        self.red = []
+                        self.ir = []
+                        
+                except Exception as e:
+                    print(f"[BLOOD] 监测过程中出错: {e}")
+                    time.sleep_ms(100)  # 出错时等待一段时间再重试
+                    
+        except Exception as e:
+            print(f"[BLOOD] 启动监测失败: {e}")
+            
         return ""
     def get_heart(self):
         #print("hert:   " + str(self.htnum))
@@ -277,15 +302,22 @@ class blood():
         return self.spo2x
 
     def get_temp(self):
-        self.isstate  = 3
-        self.i2cxueyang.writeto_mem(87, 12, b'\x00', addrsize=8)
-        self.i2cxueyang.writeto_mem(87, 13, b'\x00', addrsize=8)
-        self.i2cxueyang.writeto_mem(87, 33, b'\x01', addrsize=8)
-        tempInt = self.i2cxueyang.readfrom_mem(87, 31,1,addrsize=8);
-        tempFrac = self.i2cxueyang.readfrom_mem(87, 32,1,addrsize=8);
-        tempi = ord(tempInt) + ord(tempFrac) * 0.0625
-
-        return tempi
+        if not self._check_device():
+            print("[BLOOD] 血氧传感器不可用，无法读取温度")
+            return 0.0
+            
+        try:
+            self.isstate = 3
+            self.i2cxueyang.writeto_mem(87, 12, b'\x00', addrsize=8)
+            self.i2cxueyang.writeto_mem(87, 13, b'\x00', addrsize=8)
+            self.i2cxueyang.writeto_mem(87, 33, b'\x01', addrsize=8)
+            tempInt = self.i2cxueyang.readfrom_mem(87, 31,1,addrsize=8);
+            tempFrac = self.i2cxueyang.readfrom_mem(87, 32,1,addrsize=8);
+            tempi = ord(tempInt) + ord(tempFrac) * 0.0625
+            return tempi
+        except Exception as e:
+            print(f"[BLOOD] 读取温度失败: {e}")
+            return 0.0
         #global maxtemp
         #if maxtemp <= tempi:
         #    maxtemp = tempi
@@ -306,6 +338,70 @@ class blood():
 
     def heart_rate_stop(self):
         self.bloodbool = False
+
+    def deinit(self):
+        """释放血氧模块的所有资源"""
+        try:
+            # 停止心率监测
+            self.heart_rate_stop()
+            
+            # 重置传感器配置到初始状态
+            if self.i2cxueyang and self._device_found:
+                try:
+                    # 关闭LED电源
+                    self.i2cxueyang.writeto_mem(87, 12, b'\x00', addrsize=8)  # LED1_PA
+                    self.i2cxueyang.writeto_mem(87, 13, b'\x00', addrsize=8)  # LED2_PA
+                    self.i2cxueyang.writeto_mem(87, 16, b'\x00', addrsize=8)  # PILOT_PA
+                    
+                    # 禁用中断
+                    self.i2cxueyang.writeto_mem(87, 2, b'\x00', addrsize=8)   # INTR_ENABLE_1
+                    self.i2cxueyang.writeto_mem(87, 3, b'\x00', addrsize=8)   # INTR_ENABLE_2
+                    
+                    # 重置FIFO
+                    self.i2cxueyang.writeto_mem(87, 4, b'\x00', addrsize=8)   # FIFO_WR_PTR
+                    self.i2cxueyang.writeto_mem(87, 5, b'\x00', addrsize=8)   # OVF_COUNTER
+                    self.i2cxueyang.writeto_mem(87, 6, b'\x00', addrsize=8)   # FIFO_RD_PTR
+                    
+                    # 关闭传感器
+                    self.i2cxueyang.writeto_mem(87, 9, b'\x80', addrsize=8)   # MODE_CONFIG (shutdown mode)
+                    
+                    print("[BLOOD] 血氧传感器已重置")
+                except Exception as e:
+                    print(f"[BLOOD] 重置传感器时出错: {e}")
+            
+            # 释放Xueyang对象
+            if hasattr(self, 'xueyang') and self.xueyang:
+                try:
+                    del self.xueyang
+                except Exception as e:
+                    print(f"[BLOOD] 释放Xueyang对象时出错: {e}")
+            
+            # 清理数据缓冲区
+            self.red.clear()
+            self.ir.clear()
+            self.frequency_time.clear()
+            
+            # 重置状态变量
+            self.bloodbool = False
+            self.isstate = 0
+            self.htnum = 0
+            self.spo2x = 0
+            self.frequency = 0
+            self.hehthr = 0
+            self.lowehr = 0
+            self.oldhr = 0
+            
+            # 标记为未初始化
+            self._device_found = False
+            
+            print("[BLOOD] 血氧模块资源已释放")
+            
+        except Exception as e:
+            print(f"[BLOOD] 释放资源时出错: {e}")
+
+    def __del__(self):
+        """析构函数，确保资源被释放"""
+        self.deinit()
 
     def calc_hr_and_spo2(self,ir,red):
         return self.xueyang.calc_hr_and_spo2(ir,red)

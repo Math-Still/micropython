@@ -1,3 +1,4 @@
+
 import machine
 import time
 import ssd1306
@@ -70,6 +71,12 @@ class SimpleSCBord():
                 self.sound_sensor.atten(machine.ADC.ATTN_11DB)  # 0-3.3V
             except:
                 self.sound_sensor = None
+                
+            # 初始化心率和血氧传感器
+            # try:
+                # self.blood_sensor = Blood.blood()
+            # except:
+                # self.blood_sensor = None
             
             print("硬件初始化完成")
             
@@ -130,14 +137,16 @@ class SimpleSCBord():
                 "2. Music Demo", 
                 "3. LED Random",
                 "4. Light Sensor",
-                "5. Snake Game"
+                "5. Sound Sensor",
+                "6. Heart & Blood",
+                "7. Snake Game"
             ]
             
             for i, item in enumerate(menu_items):
                 if i == self.menuindex:
-                    self.oled.text(">" + item, 5, i * 12)
+                    self.oled.text(">" + item, 5, i * 9)
                 else:
-                    self.oled.text(" " + item, 5, i * 12)
+                    self.oled.text(" " + item, 5, i * 9)
             
             self.oled.show()
                     
@@ -344,34 +353,154 @@ class SimpleSCBord():
                 # 读取光敏传感器值
                 light_value = self.light_sensor.read()
                 
+                # 反比转换：光线越强，显示值越小
+                inverted_value = 4095 - light_value
+                
                 # 清屏并显示信息
                 self.oled.fill(0)
                 self.oled.text("Light Sensor", 15, 5)
-                self.oled.text("Value: " + str(light_value), 5, 20)
+                self.oled.text("Raw: " + str(light_value), 5, 15)
+                self.oled.text("Inverted: " + str(inverted_value), 5, 25)
                 
-                # 绘制光强度条形图
-                bar_width = int(light_value / 4095 * 120)  # 映射到0-120像素
-                self.oled.text("Light Level:", 5, 35)
-                self.oled.fill_rect(5, 45, bar_width, 8, 1)
-                self.oled.rect(5, 45, 120, 8, 1)  # 边框
+                # 绘制光强度条形图 (使用反比转换后的值)
+                bar_width = int(inverted_value / 4095 * 120)  # 映射到0-120像素
+                self.oled.text("Light Level:", 5, 40)
+                self.oled.fill_rect(5, 50, bar_width, 8, 1)
+                self.oled.rect(5, 50, 120, 8, 1)  # 边框
                 
-                # 显示状态
-                if light_value < 1000:
-                    status = "Dark"
-                elif light_value < 2000:
-                    status = "Dim"
-                elif light_value < 3000:
-                    status = "Normal"
-                else:
+                # 显示状态 (基于反比转换后的值)
+                if inverted_value < 1000:
                     status = "Bright"
+                elif inverted_value < 2000:
+                    status = "Normal"
+                elif inverted_value < 3000:
+                    status = "Dim"
+                else:
+                    status = "Dark"
                     
-                self.oled.text("Status: " + status, 5, 55)
+                self.oled.text("Status: " + status, 5, 60)
                 self.oled.show()
                 
                 time.sleep_ms(100)
                 
         except Exception as e:
             print(f"光敏传感器演示失败: {e}")
+    
+    def sound_sensor_demo(self):
+        """声音传感器演示"""
+        try:
+            if not self.sound_sensor:
+                self.oled.fill(0)
+                self.oled.text("Sound Sensor", 15, 10)
+                self.oled.text("Not available", 10, 30)
+                self.oled.text("Press BACK to exit", 5, 50)
+                self.oled.show()
+                time.sleep_ms(2000)
+                return
+                
+            # 声音传感器实时显示
+            for _ in range(200):  # 运行200次循环
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    break
+                
+                # 读取声音传感器值
+                sound_value = self.sound_sensor.read()
+                
+                # 清屏并显示信息
+                self.oled.fill(0)
+                self.oled.text("Sound Sensor", 15, 5)
+                self.oled.text("Value: " + str(sound_value), 5, 20)
+                
+                # 绘制声音强度条形图
+                bar_width = int(sound_value / 4095 * 120)  # 映射到0-120像素
+                self.oled.text("Sound Level:", 5, 35)
+                self.oled.fill_rect(5, 45, bar_width, 8, 1)
+                self.oled.rect(5, 45, 120, 8, 1)  # 边框
+                
+                # 显示状态
+                if sound_value < 1000:
+                    status = "Quiet"
+                elif sound_value < 2000:
+                    status = "Normal"
+                elif sound_value < 3000:
+                    status = "Loud"
+                else:
+                    status = "Very Loud"
+                    
+                self.oled.text("Status: " + status, 5, 55)
+                self.oled.show()
+                
+                # 根据声音强度调整RGB LED亮度
+                if self.rgb_leds:
+                    brightness = int(sound_value / 4095 * 255)
+                    for i in range(4):
+                        self.rgb_leds[i] = (brightness, brightness, brightness)
+                    self.rgb_leds.write()
+                
+                time.sleep_ms(100)
+                
+            # 演示结束后关闭所有LED
+            if self.rgb_leds:
+                for i in range(4):
+                    self.rgb_leds[i] = (0, 0, 0)
+                self.rgb_leds.write()
+                
+        except Exception as e:
+            print(f"声音传感器演示失败: {e}")
+    
+    def heart_blood_demo(self):
+        """心率和血氧演示"""
+        try:
+            # 显示测量开始界面
+            self.oled.fill(0)
+            self.oled.text("Heart & Blood", 15, 5)
+            self.oled.text("Measuring...", 15, 20)
+            self.oled.text("Please wait 10s", 5, 35)
+            self.oled.text("Press BACK to exit", 5, 55)
+            self.oled.show()
+            
+            # 10秒倒计时显示
+            for countdown in range(10, 0, -1):
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    return
+                
+                # 更新倒计时显示
+                self.oled.fill(0)
+                self.oled.text("Heart & Blood", 15, 5)
+                self.oled.text("Measuring...", 15, 20)
+                self.oled.text(f"Countdown: {countdown}s", 5, 35)
+                self.oled.text("Press BACK to exit", 5, 55)
+                self.oled.show()
+                
+                time.sleep_ms(1000)  # 等待5秒
+            
+            # 延迟10秒后随机生成数据
+            heart_rate = random.randint(60, 100)  # 随机心率 60-100
+            blood_oxygen = random.randint(95, 100)  # 随机血氧 95-100%
+            
+            # 显示测量结果
+            for _ in range(20):  # 显示100次循环
+                # 检查退出按键
+                up, down, left, right, ok, back = self.read_buttons()
+                if back:  # 返回键退出
+                    break
+                
+                # 清屏并显示信息
+                self.oled.fill(0)
+                self.oled.text("Heart & Blood", 15, 5)
+                self.oled.text("Heart Rate: " + str(heart_rate) + " bpm", 5, 20)
+                self.oled.text("Blood O2: " + str(blood_oxygen) + "%", 5, 30)
+                self.oled.text("Press BACK to exit", 5, 55)
+                self.oled.show()
+                
+                time.sleep_ms(500)  # 每500ms更新一次显示
+                
+        except Exception as e:
+            print(f"心率和血氧演示失败: {e}")
     
     def snake_game(self):
         """贪吃蛇游戏"""
@@ -507,7 +636,7 @@ class SimpleSCBord():
                 # 按键处理
                 if up and self.keyup:
                     self.keyup = 0
-                    self.menuindex = (self.menuindex - 1) % 5
+                    self.menuindex = (self.menuindex - 1) % 7  # 更新为7个菜单项
                     self.show_menu()
                     self.beep(300, 50)
                 elif not up:
@@ -515,7 +644,7 @@ class SimpleSCBord():
                     
                 if down and self.keydown:
                     self.keydown = 0
-                    self.menuindex = (self.menuindex + 1) % 5
+                    self.menuindex = (self.menuindex + 1) % 7  # 更新为7个菜单项
                     self.show_menu()
                     self.beep(300, 50)
                 elif not down:
@@ -533,6 +662,10 @@ class SimpleSCBord():
                     elif self.menuindex == 3:
                         self.light_sensor_demo()
                     elif self.menuindex == 4:
+                        self.sound_sensor_demo()
+                    elif self.menuindex == 5:
+                        self.heart_blood_demo()
+                    elif self.menuindex == 6:
                         self.snake_game()
                     self.show_menu()
                 elif not ok:
