@@ -13,7 +13,6 @@ gc.collect()
 
 import time
 import machine
-import send_fucking_data
 
 # ==========================================
 # OLED显示屏初始化
