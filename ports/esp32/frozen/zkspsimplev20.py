@@ -202,30 +202,10 @@ class SimpleSCBord():
                 return
 
             # 播放按键音
-            self.beep(25, 100 + (x * 50))
+            # self.beep(25, 100 + (x * 50))
 
             if x >= 0:
                 self.oled.fill(0)
-                
-                # 绘制选中项的高亮框
-                if x < 4:
-                    # 第一行 (0-3)
-                    self.oled.rect(x * 32, 0, 32, 32, 1)
-                    # 绘制选中框的内框
-                    self.oled.rect(x * 32 + 2, 2, 28, 28, 1)
-                    # 填充选中框内部
-                    self.oled.fill_rect(x * 32 + 4, 4, 24, 24, 1)
-                    # 重新绘制图标（反色显示）
-                    self.draw_menu_icon_inverted(x, x * 32, 0)
-                elif x >= 4:
-                    # 第二行 (4-7)
-                    self.oled.rect((x-4) * 32, 32, 32, 32, 1)
-                    # 绘制选中框的内框
-                    self.oled.rect((x-4) * 32 + 2, 34, 28, 28, 1)
-                    # 填充选中框内部
-                    self.oled.fill_rect((x-4) * 32 + 4, 36, 24, 24, 1)
-                    # 重新绘制图标（反色显示）
-                    self.draw_menu_icon_inverted(x, (x-4) * 32, 32)
                 
                 # 绘制所有菜单图标
                 if self.tx:
@@ -246,6 +226,18 @@ class SimpleSCBord():
                         else:
                             # 第二行 (4-7)
                             self.draw_menu_icon(i, (i-4) * 32, 32)
+                
+                # 绘制选中项的框选效果
+                if x < 4:
+                    # 第一行 (0-3) - 绘制外框
+                    self.oled.rect(x * 32, 0, 32, 32, 1)
+                    # 绘制内框
+                    self.oled.rect(x * 32 + 2, 2, 28, 28, 1)
+                elif x >= 4:
+                    # 第二行 (4-7) - 绘制外框
+                    self.oled.rect((x-4) * 32, 32, 32, 32, 1)
+                    # 绘制内框
+                    self.oled.rect((x-4) * 32 + 2, 34, 28, 28, 1)
                 
                 self.oled.show()
 
@@ -336,89 +328,6 @@ class SimpleSCBord():
         except:
             pass
 
-    def draw_menu_icon_inverted(self, index, x, y):
-        """绘制反色菜单图标（选中状态）"""
-        try:
-            if index == 0:  # 小球游戏
-                # 绘制游戏手柄（反色）
-                self.oled.rect(x + 6, y + 10, 20, 12, 0)  # 手柄主体
-                self.oled.circle(x + 10, y + 16, 3, 0)    # 左摇杆
-                self.oled.circle(x + 22, y + 16, 3, 0)    # 右摇杆
-                self.oled.rect(x + 8, y + 6, 4, 4, 0)     # 按钮1
-                self.oled.rect(x + 20, y + 6, 4, 4, 0)    # 按钮2
-                self.oled.rect(x + 8, y + 22, 4, 4, 0)    # 按钮3
-                self.oled.rect(x + 20, y + 22, 4, 4, 0)   # 按钮4
-            elif index == 1:  # 音乐
-                # 绘制音符和音乐符号（反色）
-                self.oled.circle(x + 12, y + 12, 2, 0)    # 音符头
-                self.oled.line(x + 14, y + 10, x + 14, y + 20, 0)  # 音符杆
-                self.oled.line(x + 14, y + 10, x + 18, y + 8, 0)   # 音符旗
-                self.oled.line(x + 14, y + 10, x + 18, y + 12, 0)  # 音符旗
-                # 绘制波浪线表示音乐（反色）
-                for i in range(3):
-                    self.oled.line(x + 20 + i * 3, y + 16, x + 22 + i * 3, y + 14, 0)
-                    self.oled.line(x + 22 + i * 3, y + 14, x + 24 + i * 3, y + 18, 0)
-            elif index == 2:  # 三轴
-                # 绘制3D坐标轴（反色）
-                self.oled.line(x + 8, y + 20, x + 24, y + 12, 0)   # X轴
-                self.oled.line(x + 8, y + 20, x + 16, y + 8, 0)    # Y轴  
-                self.oled.line(x + 8, y + 20, x + 8, y + 24, 0)    # Z轴
-                self.oled.pixel(x + 8, y + 20, 0)  # 原点
-                # 绘制箭头（反色）
-                self.oled.line(x + 22, y + 10, x + 24, y + 12, 0)
-                self.oled.line(x + 24, y + 12, x + 22, y + 14, 0)
-                self.oled.line(x + 14, y + 6, x + 16, y + 8, 0)
-                self.oled.line(x + 16, y + 8, x + 18, y + 6, 0)
-            elif index == 3:  # 心率血氧
-                # 绘制心形（反色）
-                self.oled.circle(x + 12, y + 12, 3, 0)
-                self.oled.circle(x + 20, y + 12, 3, 0)
-                self.oled.line(x + 8, y + 16, x + 16, y + 24, 0)
-                self.oled.line(x + 24, y + 16, x + 16, y + 24, 0)
-                # 绘制心跳线（反色）
-                self.oled.line(x + 6, y + 26, x + 10, y + 24, 0)
-                self.oled.line(x + 10, y + 24, x + 14, y + 28, 0)
-                self.oled.line(x + 14, y + 28, x + 18, y + 24, 0)
-                self.oled.line(x + 18, y + 24, x + 22, y + 28, 0)
-                self.oled.line(x + 22, y + 28, x + 26, y + 26, 0)
-            elif index == 4:  # 噪音
-                # 绘制声波和麦克风（反色）
-                self.oled.rect(x + 12, y + 8, 8, 12, 0)   # 麦克风主体
-                self.oled.line(x + 16, y + 6, x + 16, y + 8, 0)    # 麦克风杆
-                self.oled.line(x + 14, y + 6, x + 18, y + 6, 0)    # 麦克风头
-                # 绘制声波（反色）
-                for i in range(4):
-                    self.oled.line(x + 22 + i * 2, y + 12 - i, x + 22 + i * 2, y + 12 + i, 0)
-            elif index == 5:  # 光敏
-                # 绘制太阳和光线（反色）
-                self.oled.circle(x + 16, y + 16, 5, 0)    # 太阳
-                # 绘制光线（反色）
-                for i in range(8):
-                    angle = i * 45
-                    x1 = x + 16 + int(8 * math.cos(math.radians(angle)))
-                    y1 = y + 16 + int(8 * math.sin(math.radians(angle)))
-                    x2 = x + 16 + int(12 * math.cos(math.radians(angle)))
-                    y2 = y + 16 + int(12 * math.sin(math.radians(angle)))
-                    self.oled.line(x1, y1, x2, y2, 0)
-            elif index == 6:  # RGB控制
-                # 绘制RGB颜色轮（反色）
-                self.oled.circle(x + 16, y + 16, 8, 0)    # 外圆
-                # 绘制RGB扇形（反色）
-                self.oled.fill_rect(x + 12, y + 12, 8, 8, 0)  # 中心方块
-                # 绘制颜色指示（反色）
-                self.oled.rect(x + 8, y + 8, 4, 4, 0)     # R区域
-                self.oled.rect(x + 20, y + 8, 4, 4, 0)    # G区域
-                self.oled.rect(x + 8, y + 20, 4, 4, 0)    # B区域
-            elif index == 7:  # 线条演示
-                # 绘制几何图形组合（反色）
-                self.oled.circle(x + 16, y + 16, 6, 0)    # 外圆
-                self.oled.rect(x + 12, y + 12, 8, 8, 0)   # 内方
-                self.oled.circle(x + 16, y + 16, 3, 0)    # 中心圆
-                # 绘制装饰线条（反色）
-                self.oled.line(x + 8, y + 8, x + 24, y + 24, 0)
-                self.oled.line(x + 24, y + 8, x + 8, y + 24, 0)
-        except:
-            pass
 
     def beep(self, freq, duration):
         """蜂鸣器发声"""
@@ -585,59 +494,70 @@ class SimpleSCBord():
     def music(self):
         """音乐功能 - 仿照原始代码"""
         try:
-            if self.isstart:
-                self.ok = False
-                music_list = ["TWINKLE", "BIRTHDAY", "BLUES", "FUNK", "ODE", "NYAN", "WEDDING", "FUNERAL", "DADADADUM", "PRELUDE"]
-                music_index = 0
+            self.ok = False
+            music_list = ["TWINKLE", "BIRTHDAY", "BLUES", "FUNK", "ODE", "NYAN", "WEDDING", "FUNERAL", "DADADADUM", "PRELUDE"]
+            music_index = 0
+            
+            # 初始化按键状态
+            self.keyup = 1
+            self.keydown = 1
+            self.keyleft = 1
+            self.keyright = 1
+            
+            while self.isstart:
+                # 读取按键
+                up, down, left, right, ok, back = self.read_buttons()
                 
-                while self.isstart:
-                    # 读取按键
-                    up, down, left, right, ok, back = self.read_buttons()
+                # 上键处理
+                if up and self.keydown:
+                    self.keydown = 0
+                    if music_index > 0:
+                        music_index -= 1
+                elif not up and self.keydown == 0:
+                    self.keydown = 1
                     
-                    if up and self.keydown:
-                        self.keydown = 0
-                        if music_index > 0:
-                            music_index -= 1
-                    elif not up and self.keydown == 0:
-                        self.keydown = 1
-                        
-                    if down and self.keyup:
-                        self.keyup = 0
-                        if music_index < len(music_list) - 1:
-                            music_index += 1
-                    elif not down and self.keyup == 0:
-                        self.keyup = 1
-                        
-                    if left and self.keyleft:
-                        self.keyleft = 0
-                        if music_index > 0:
-                            music_index -= 1
-                    elif not left and self.keyleft == 0:
-                        self.keyleft = 1
-                        
-                    if right and self.keyright:
-                        self.keyright = 0
-                        if music_index < len(music_list) - 1:
-                            music_index += 1
-                    elif not right and self.keyright == 0:
-                        self.keyright = 1
+                # 下键处理
+                if down and self.keyup:
+                    self.keyup = 0
+                    if music_index < len(music_list) - 1:
+                        music_index += 1
+                elif not down and self.keyup == 0:
+                    self.keyup = 1
                     
-                    # 显示音乐选择界面
-                    self.oled.fill(0)
-                    self.oled.text("Music Player", 0, 0)
-                    self.oled.text("Num: " + str(music_index), 0, 16)
-                    self.oled.text("Name: " + music_list[music_index], 0, 32)
-                    self.oled.show()
+                # 左键处理
+                if left and self.keyleft:
+                    self.keyleft = 0
+                    if music_index > 0:
+                        music_index -= 1
+                elif not left and self.keyleft == 0:
+                    self.keyleft = 1
+                    
+                # 右键处理
+                if right and self.keyright:
+                    self.keyright = 0
+                    if music_index < len(music_list) - 1:
+                        music_index += 1
+                elif not right and self.keyright == 0:
+                    self.keyright = 1
+                
+                # 显示音乐选择界面
+                self.oled.fill(0)
+                self.oled.text("Music Player", 0, 0)
+                self.oled.text("Num: " + str(music_index), 0, 16)
+                self.oled.text("Name: " + music_list[music_index], 0, 32)
+                self.oled.show()
 
-                    if self.ok:
-                        self.play_music(music_list[music_index])
-                        self.ok = False
-                    
-                    if back:
-                        self.isstart = False
+                # 播放音乐
+                if ok:
+                    self.play_music(music_list[music_index])
+                    self.ok = False
+                
+                # 退出
+                if back:
+                    self.isstart = False
                     break
 
-                    time.sleep_ms(100)
+                time.sleep_ms(100)
 
         except Exception as e:
             print(f"音乐功能失败: {e}")
